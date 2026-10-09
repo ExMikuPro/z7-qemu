@@ -4,7 +4,7 @@
 
 A source overlay for QEMU 10.2.4 that provides an experimental Nikon Z7
 research machine, a local browser controller, and a functional Bayer → ISP →
-LCD pipeline. Published by the **WonderLantern** organization.
+LCD pipeline. A part of the **WonderLantern** project.
 
 **You supply the firmware.** This repository contains no Nikon firmware,
 decrypted proprietary program, camera dump, key, font, icon bitmap, calibration
