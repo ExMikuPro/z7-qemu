@@ -278,6 +278,8 @@ class Camera:
         self.live_log = self.frame_spool/f'qemu-{self.boot_count}.log'
         self.console = self.live_log.open('w')
         env = dict(os.environ, Z7_MMIO_QUIET='1')
+        if os.name == 'nt' and build.get('native_runtime_path'):
+            env['PATH'] = build['native_runtime_path'] + os.pathsep + env.get('PATH', '')
         env.pop('Z7_IMAGE_CONFIG_RECORD', None)
         env.pop('Z7_IMAGE_PROCESS_TEST', None)
         env.pop('Z7_ISP_DISABLE_CACHE', None)
@@ -336,7 +338,8 @@ class Camera:
         env.pop('Z7_GPU_ICON_DUMP_DIR', None)
         if getattr(self, 'gpu_icon_dump', None):
             env['Z7_GPU_ICON_DUMP_DIR'] = str(self.gpu_icon_dump)
-        self.proc = subprocess.Popen(command, stdout=self.console, stderr=subprocess.STDOUT, env=env)
+        options = dict(creationflags=subprocess.CREATE_NO_WINDOW) if os.name == 'nt' else {}
+        self.proc = subprocess.Popen(command, stdout=self.console, stderr=subprocess.STDOUT, env=env, **options)
         self.remote = Remote(port)
         self.remote.command('qSupported:multiprocess+;xmlRegisters=arm')
         self.remote.command('qXfer:features:read:target.xml:0,fff')
@@ -569,8 +572,8 @@ class Camera:
             health = dict(self.state['capture'])
             health.update(capture_health(self.remote, self.device_evidence or None))
             self.update(capture=health)
-        # High-frequency QMP scratch I/O stays on the Nikon Linux filesystem.
-        # Only changed PNGs and audit evidence go to the shared project drive.
+        # High-frequency QMP scratch I/O stays in host-local temporary storage.
+        # Only changed PNGs and audit evidence go to the project drive.
         path = self.frame_spool/'screen.ppm'
         self.monitor.command('screendump', {'filename': str(path)})
         w, h, pixels = ppm_pixels(path.read_bytes())
@@ -721,8 +724,6 @@ def main():
         raw_default = a.raw_source or active_manifest('native0' if a.photo_liveview else 'unpacked')
     if a.photo_liveview and a.raw_source and a.raw_source.resolve() != active_manifest('native0'):
         p.error('--photo-liveview uses the checked active native0 source; update active_cmos.json to replace it')
-    if os.name == 'nt':
-        p.error('Run this launcher in Linux or an explicitly selected WSL distribution; see docs/build.md')
     ingress = a.raw_ingress_test or a.photo_liveview
     camera = Camera(a.port, a.profile, capture_control_test=a.capture_control_test or a.photo_liveview,
                     raw_source=raw_default, exmcu_no_lens=a.no_lens or a.photo_liveview,
