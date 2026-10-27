@@ -57,3 +57,10 @@ the specific negative or invalid cases relevant to a device change.
 Do not equate accepted key actions with successful shooting. No physical CMOS
 protocol, AF/PDAF, MVD, recording, hardware add-on loading or flash acceptance
 is certified by this test. The board has no complete VMState snapshot support.
+
+## Optional shoulder replay
+
+See [shoulder-display.md](shoulder-display.md) for the firmware-free observer,
+protocol and service tests, and the opt-in private native-function reference
+checks. Public CI needs no companion firmware or Unicorn. Neither test scope
+certifies full MCU RTOS execution or camera hardware equivalence.

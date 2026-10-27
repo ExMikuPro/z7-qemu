@@ -28,6 +28,9 @@ FILES = {
     'tools/interactive.html','tools/verify_ui.py','tools/smoke_qemu.py','tools/audit_publication.py',
     'tests/test_cmos_source.py','tests/test_raw_input.py','tests/test_gpu.c',
     'tests/test_isp.c','tests/include/ui/console.h','tests/run.sh',
+    'qemu/nikon-z7-shoulder.h','tools/shoulder_protocol.py','tools/shoulder_display.py',
+    'tests/test_shoulder_protocol.py','tests/test_shoulder_display.py','tests/test_shoulder_observer.c',
+    'requirements-shoulder.txt','docs/shoulder-display.md',
 }
 IGNORED = {'.git','.local','.build','.venv','__pycache__'}
 SECRET_PATTERNS = [
@@ -58,6 +61,8 @@ def main():
         dirs[:] = [name for name in dirs if name not in IGNORED]
         for name in files:
             path = Path(directory)/name
+            # Linked worktrees use a .git metadata file instead of a directory.
+            if path == ROOT/'.git' and not path.is_symlink(): continue
             if path.is_symlink(): raise ValueError('Symlink in public tree: '+str(path))
             discovered.add(path.relative_to(ROOT).as_posix())
     if discovered - {MANIFEST} != FILES:
