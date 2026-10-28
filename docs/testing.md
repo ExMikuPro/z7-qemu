@@ -82,7 +82,15 @@ The 11 Python tests, 270 renderer contracts, 398 ISP contracts and firmware-free
 QMP realization were rerun using this branch's host tools. The smoke used the
 existing lab-built QEMU executable; a new QEMU build from this extracted branch
 was not performed locally. The smoke helper uses
-localhost TCP QMP and waits for each command's reply, including a paused status
-query and clean quit. These Windows runs did not use ASan/UBSan; retain the Linux
+localhost TCP QMP and requires replies to capability negotiation and the paused
+status query. After sending quit, it requires a zero process exit within ten
+seconds rather than a QMP acknowledgement; QEMU may terminate before delivering
+that reply. These Windows runs did not use ASan/UBSan; retain the Linux
 sanitizer workflow above as a separate validation scope. Earlier assisted UI
 results belong to the independent lab and were not rerun on this branch.
+
+The follow-up quit regression adds 12 synthetic TCP/process cases, bringing the
+Python suite to 23 tests. They cover acknowledged quit, EOF/reset after quit,
+missing/reset/error capability and status replies, an unexpected running status,
+a nonzero process exit and a quit timeout. Earlier replies remain mandatory, and
+a missing quit acknowledgement cannot hide a crash or a hung process.
