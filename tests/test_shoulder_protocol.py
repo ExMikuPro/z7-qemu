@@ -63,3 +63,31 @@ class ProtocolTests(unittest.TestCase):
             self.assertEqual(reader.rejected, 1)
             path.unlink(); path.write_text(record)
             self.assertEqual(len(reader.poll(path)), 1)
+
+
+    def test_crlf_and_split_terminator(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'trace'
+            reader = CaptureReader()
+            hex_data = wire().hex()
+            record_lf = PREFIX + hex_data + '\n'
+            record_crlf = PREFIX + hex_data + '\r\n'
+
+            # 普通 CRLF 记录应被接受
+            path.write_bytes(record_crlf.encode())
+            snaps = reader.poll(path)
+            self.assertEqual(len(snaps), 1)
+            self.assertEqual(reader.rejected, 0)
+
+            # CRLF 终止符被拆到两次读取
+            path.write_bytes(record_crlf[:-1].encode())   # 只写到 \r
+            self.assertEqual(reader.poll(path), [])       # 尚未完整
+            with path.open('ab') as f:
+                f.write(b'\n' + record_lf.encode())       # 补上 \n 再加一条 LF
+            snaps = reader.poll(path)
+            self.assertEqual(len(snaps), 1)
+            self.assertEqual(reader.rejected, 0)
+
+            # 再确认一次纯 LF 仍然正常
+            path.write_text(record_lf)
+            self.assertEqual(len(reader.poll(path)), 1)

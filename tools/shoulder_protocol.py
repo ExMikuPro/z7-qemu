@@ -63,6 +63,8 @@ class CaptureReader:
         for line in lines:
             if not line.startswith(PREFIX.encode()):
                 continue
+            if line.endswith(b'\r'):
+                line = line[:-1]
             encoded = line[len(PREFIX):]
             if not re.fullmatch(b'[0-9a-f]{512}', encoded):
                 self.rejected += 1
