@@ -46,7 +46,8 @@ ML port, or a camera-installable WonderLantern build.
 
 ## Quick start
 
-Use Linux with Python 3.12 or newer. On Windows, select your intended WSL
+Use Linux with Python 3.12 or newer, or the [native Windows MSYS2/UCRT64 build](docs/build.md#native-windows-x64).
+For Windows with WSL, select your intended WSL
 distribution explicitly; this project's local environment is `ubuntu-noble-nikon`.
 The unrelated `ubuntu-noble` coursework environment is excluded by the tools.
 

@@ -57,3 +57,40 @@ the specific negative or invalid cases relevant to a device change.
 Do not equate accepted key actions with successful shooting. No physical CMOS
 protocol, AF/PDAF, MVD, recording, hardware add-on loading or flash acceptance
 is certified by this test. The board has no complete VMState snapshot support.
+
+## Native Windows host checks
+
+The native Windows port was exercised in an independent modified lab with
+MSYS2 UCRT64 and QEMU 10.2.4. The extracted contribution keeps the original
+stock-firmware input guard. Run the Python contracts from PowerShell:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p 'test_*.py' -v
+```
+
+From UCRT64, the synthetic C contracts can be checked without sanitizers:
+
+```sh
+mkdir -p .build/tests
+cc -std=c11 -O1 -g -Itests/include tests/test_gpu.c $(pkg-config --cflags --libs glib-2.0) -lm -o .build/tests/gpu.exe
+cc -std=c11 -O1 -g tests/test_isp.c $(pkg-config --cflags --libs glib-2.0) -lm -o .build/tests/isp.exe
+.build/tests/gpu.exe
+.build/tests/isp.exe
+```
+
+The 11 Python tests, 270 renderer contracts, 398 ISP contracts and firmware-free
+QMP realization were rerun using this branch's host tools. The smoke used the
+existing lab-built QEMU executable; a new QEMU build from this extracted branch
+was not performed locally. The smoke helper uses
+localhost TCP QMP and requires replies to capability negotiation and the paused
+status query. After sending quit, it requires a zero process exit within ten
+seconds rather than a QMP acknowledgement; QEMU may terminate before delivering
+that reply. These Windows runs did not use ASan/UBSan; retain the Linux
+sanitizer workflow above as a separate validation scope. Earlier assisted UI
+results belong to the independent lab and were not rerun on this branch.
+
+The follow-up quit regression adds 12 synthetic TCP/process cases, bringing the
+Python suite to 23 tests. They cover acknowledged quit, EOF/reset after quit,
+missing/reset/error capability and status replies, an unexpected running status,
+a nonzero process exit and a quit timeout. Earlier replies remain mandatory, and
+a missing quit acknowledgement cannot hide a crash or a hung process.
