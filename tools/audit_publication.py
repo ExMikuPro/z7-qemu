@@ -31,6 +31,7 @@ FILES = {
     'qemu/nikon-z7-shoulder.h','tools/shoulder_protocol.py','tools/shoulder_display.py',
     'tests/test_shoulder_protocol.py','tests/test_shoulder_display.py','tests/test_shoulder_observer.c',
     'requirements-shoulder.txt','docs/shoulder-display.md',
+    'tests/test_smoke_qemu.py',
 }
 IGNORED = {'.git','.local','.build','.venv','__pycache__'}
 SECRET_PATTERNS = [

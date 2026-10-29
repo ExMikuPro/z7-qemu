@@ -53,15 +53,15 @@ class ProtocolTests(unittest.TestCase):
             path = Path(directory) / 'trace'
             reader = CaptureReader()
             record = PREFIX + wire().hex() + '\n'
-            path.write_text('unrelated\n' + record[:200])
+            path.write_bytes(('unrelated\n' + record[:200]).encode())
             self.assertEqual(reader.poll(path), [])
-            with path.open('a') as f: f.write(record[200:])
+            with path.open('ab') as f: f.write(record[200:].encode())
             self.assertEqual(len(reader.poll(path)), 1)
             self.assertEqual(reader.poll(path), [])
-            with path.open('a') as f: f.write(PREFIX + '00\n' + record)
+            with path.open('ab') as f: f.write((PREFIX + '00\n' + record).encode())
             self.assertEqual(len(reader.poll(path)), 1)
             self.assertEqual(reader.rejected, 1)
-            path.unlink(); path.write_text(record)
+            path.unlink(); path.write_bytes(record.encode())
             self.assertEqual(len(reader.poll(path)), 1)
 
 
@@ -69,25 +69,73 @@ class ProtocolTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'trace'
             reader = CaptureReader()
-            hex_data = wire().hex()
-            record_lf = PREFIX + hex_data + '\n'
-            record_crlf = PREFIX + hex_data + '\r\n'
+            first = wire()
+            second = bytearray(wire())
+            second[9] ^= 1
+            second[255] = (255 - sum(second[:255])) & 255
+            record_crlf = (PREFIX + first.hex() + '\r\n').encode()
+            record_lf = (PREFIX + second.hex() + '\n').encode()
 
-            # 普通 CRLF 记录应被接受
-            path.write_bytes(record_crlf.encode())
-            snaps = reader.poll(path)
-            self.assertEqual(len(snaps), 1)
-            self.assertEqual(reader.rejected, 0)
+            path.write_bytes(record_crlf)
+            self.assertEqual([s.payload for s in reader.poll(path)], [first[8:120]])
+            self.assertEqual(reader.poll(path), [])
 
-            # CRLF 终止符被拆到两次读取
-            path.write_bytes(record_crlf[:-1].encode())   # 只写到 \r
-            self.assertEqual(reader.poll(path), [])       # 尚未完整
+            # Truncate, then complete the pending CRLF and add a full LF record.
+            path.write_bytes(record_crlf[:-1])
+            self.assertEqual(reader.poll(path), [])
             with path.open('ab') as f:
-                f.write(b'\n' + record_lf.encode())       # 补上 \n 再加一条 LF
+                f.write(b'\n' + record_lf)
             snaps = reader.poll(path)
-            self.assertEqual(len(snaps), 1)
+            self.assertEqual(len(snaps), 2)
+            self.assertEqual([s.payload for s in snaps], [first[8:120], second[8:120]])
+            self.assertEqual(reader.rejected, 0)
+            self.assertEqual(reader.poll(path), [])
             self.assertEqual(reader.rejected, 0)
 
-            # 再确认一次纯 LF 仍然正常
-            path.write_text(record_lf)
-            self.assertEqual(len(reader.poll(path)), 1)
+            path.write_bytes(record_lf)
+            self.assertEqual([s.payload for s in reader.poll(path)], [second[8:120]])
+            self.assertEqual(reader.poll(path), [])
+            self.assertEqual(reader.rejected, 0)
+
+    def test_split_crlf_terminator_only(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'trace'
+            reader = CaptureReader()
+            path.write_bytes((PREFIX + wire().hex() + '\r').encode())
+            self.assertEqual(reader.poll(path), [])
+            self.assertEqual(reader.rejected, 0)
+            with path.open('ab') as f:
+                f.write(b'\n')
+            snaps = reader.poll(path)
+            self.assertEqual(len(snaps), 1)
+            self.assertEqual(snaps[0].payload, wire()[8:120])
+            self.assertEqual(reader.poll(path), [])
+            self.assertEqual(reader.rejected, 0)
+
+    def test_rejects_malformed_records(self):
+        valid = wire().hex().encode()
+        checksum = bytearray(wire()); checksum[30] ^= 1
+        trailer = bytearray(wire()); trailer[252] = 0
+        trailer[255] = (255 - sum(trailer[:255])) & 255
+        records = (
+            valid + b'\r\r', valid + b'x', valid + b' ',
+            b'g' + valid[1:], valid.upper(), valid[:-2], valid + b'00',
+            checksum.hex().encode(), trailer.hex().encode(),
+            wire(length=111).hex().encode(), wire(channel=7).hex().encode(),
+            wire(tag=5).hex().encode(),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            for encoded in records:
+                with self.subTest(encoded_length=len(encoded), suffix=encoded[-4:]):
+                    path = Path(directory) / 'trace'
+                    reader = CaptureReader()
+                    path.write_bytes(PREFIX.encode() + encoded + b'\n')
+                    self.assertEqual(reader.poll(path), [])
+                    self.assertEqual(reader.rejected, 1)
+                    self.assertEqual(reader.poll(path), [])
+                    self.assertEqual(reader.rejected, 1)
+                    # A rejected record must not discard the following valid one.
+                    with path.open('ab') as f:
+                        f.write(PREFIX.encode() + valid + b'\r\n')
+                    self.assertEqual([s.payload for s in reader.poll(path)], [wire()[8:120]])
+                    self.assertEqual(reader.rejected, 1)
